@@ -1,0 +1,20 @@
+{
+  "name": "simple-test",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "bank": "git+https://github.com/kad3nce/bank.git",
+    "google-spreadsheet": "git+https://github.com/kad3nce/node-google-spreadsheet.git",
+    "moment": "^2.10.6",
+    "ramda": "^0.17.1"
+  },
+  "devDependencies": {
+    "babel": "^5.8.23"
+  }
+}
