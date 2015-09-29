@@ -10,7 +10,9 @@
   "license": "ISC",
   "dependencies": {
     "bank": "git+https://github.com/kad3nce/bank.git",
+    "dbox": "^0.6.4",
     "google-spreadsheet": "git+https://github.com/kad3nce/node-google-spreadsheet.git",
+    "json2csv": "^2.12.0",
     "moment": "^2.10.6",
     "ramda": "^0.17.1"
   },

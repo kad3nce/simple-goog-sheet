@@ -1,3 +1,24 @@
+var dbox  = require('dbox');
+var json2csv = require('json2csv');
+var app   = dbox.app({
+  app_key: process.env.DBOX_APP_KEY,
+  app_secret: process.env.DBOX_APP_SECRET
+});
+
+// TO GET NEW TOKEN, UNCOMMENT requesttoken call, copy-paste URL output into a
+// browser, and approve the request.
+// app.requesttoken(function(status, requestToken){
+//   console.log(requestToken)
+//   process.exit();
+// });
+// THEN PASTE THE OUTPUT OF THE FIRST PART INTO requestToken and run the second
+// half.
+// var requestToken = ;
+// app.accesstoken(requestToken, function(status, accessToken){
+//   console.log(accessToken)
+//   process.exit();
+// });
+
 const SPREADSHEET_KEY = '10sbRsHAydaiV6ujP4Bty8TNr29-_vabPzCddNomyKfI';
 const USE_CACHED_SIMPLE_DATA = false;
 
@@ -8,6 +29,7 @@ const creds = process.env.GOOG_SECRETS ?
 const googleSpreadsheet = require('google-spreadsheet');
 const moment = require('moment');
 const R = require('ramda');
+const dboxClient =  app.client(JSON.parse(process.env.DBOX_ACCESS_TOKEN));
 
 const startEndForCurrentMonth = function () {
   return [
@@ -35,6 +57,29 @@ if (!Promise.wrap) {
           args.concat( function(err,v){
             if (err) {
               reject( err );
+            }
+            else {
+              resolve( v );
+            }
+          } )
+        );
+      } );
+    };
+  };
+}
+
+if (!Promise.wrapDropboxCallback) {
+  Promise.wrapDropboxCallback = function(fn) {
+    return function() {
+      var args = [].slice.call( arguments );
+
+      return new Promise( function(resolve,reject){
+        fn.apply(
+          null,
+          args.concat( function(status,v){
+            if (status.toString().split('')[0] !== '2') {
+              v.status = status;
+              reject( v );
             }
             else {
               resolve( v );
@@ -175,13 +220,28 @@ const billsSheetHeaders = [
   'Memo'
 ];
 
-const updateTransactionsForMonth = async function (budgetSpreadsheet, transactions) {
-  let transactionsForMonth = transactionsInTimeRange(startEndForCurrentMonth(), transactions);
+const makeCsv = async function (fields, data) {
+  return Promise.wrap(json2csv)({ fields, data })
+    .catch(rethrowErr);
+};
 
+const writeFileToDropbox = async function (filePath, fileContents) {
+  return Promise.wrapDropboxCallback(dboxClient.put)(filePath, fileContents)
+    .catch(rethrowErr);
+};
+
+const updateTransactions = async function (transactions) {
+  let transactionsInCsvFormat = transactions.map(jsonFormatToCsvFormat);
+  let csv = await makeCsv(billsSheetHeaders, transactionsInCsvFormat);
+  return await writeFileToDropbox('/Public/simple-transactions.csv', csv)
+    .then(() => console.log('~> Updated transactions.'));
+};
+
+const updateTransactionsDirectly = async function (budgetSpreadsheet, transactions) {
   let worksheet = await getWorksheet(budgetSpreadsheet, 'Bills');
-  await clearWorksheet(budgetSpreadsheet, worksheet, 'Bills', transactionsForMonth.length+1);
-  let rows = await getRows(budgetSpreadsheet, 2, 2, transactionsForMonth.length);
-  return Promise.all(transactionsForMonth.map((transaction, i) => {
+  await clearWorksheet(budgetSpreadsheet, worksheet, 'Bills', transactions.length+1);
+  let rows = await getRows(budgetSpreadsheet, 2, 2, transactions.length);
+  return Promise.all(transactions.map((transaction, i) => {
     return updateRow(budgetSpreadsheet, 2, rows[i], R.values(jsonFormatToCsvFormat(transaction)));
   }))
   .then(() => console.log('~> Updated transactions.'))
@@ -198,7 +258,7 @@ const updateGoogleSpreadsheet = function (balances, transactions) {
   Promise.wrap(budgetSpreadsheet.useServiceAccountAuth)(creds)
   .then(() => Promise.all([
     updateCurrentBalances(budgetSpreadsheet, balances),
-    updateTransactionsForMonth(budgetSpreadsheet, transactions)
+    updateTransactions(transactionsInTimeRange(startEndForCurrentMonth(), transactions))
   ]))
   .catch(rethrowErr);
 };
